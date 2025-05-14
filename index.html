@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MNIST Predictor</title>
+  <style>
+    :root {
+      --bg-color: #121212;
+      --text-color: #e0e0e0;
+      --accent-color: #bb86fc;
+      --secondary-color: #03dac6;
+      --surface-color: #1e1e1e;
+      --error-color: #cf6679;
+      --canvas-border: #333;
+      --bar-bg: #333;
+      --bar-fill: #03dac6;
+      --active-bar-fill: #bb86fc;
+      --grid-color: rgba(255, 255, 255, 0.1);
+      --canvas-bg: #000;
+      --header-bg: rgba(30, 30, 30, 0.8);
+    }
+    
+    body { 
+      font-family: 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+      background-color: var(--bg-color);
+      background-image: 
+        radial-gradient(circle at 20% 30%, rgba(90, 60, 160, 0.2), transparent 40%),
+        radial-gradient(circle at 80% 70%, rgba(25, 180, 160, 0.1), transparent 40%);
+      color: var(--text-color);
+      margin: 0;
+      padding: 0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    
+    header {
+      width: 100%;
+      background-color: var(--header-bg);
+      backdrop-filter: blur(9px);
+      -webkit-backdrop-filter: blur(9px);
+      box-shadow: 0 2px 9px rgba(0, 0, 0, 0.3);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    
+    nav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      max-width: 1152px;
+      margin: 0 auto;
+      padding: 9px 19px;
+    }
+    
+    .logo {
+      color: var(--accent-color);
+      font-size: 19px;
+      font-weight: bold;
+      text-decoration: none;
+    }
+    
+    .github-link {
+      display: flex;
+      align-items: center;
+      color: var(--text-color);
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+    
+    .github-link:hover {
+      color: var(--accent-color);
+    }
+    
+    .github-icon {
+      margin-right: 5px;
+      width: 23px;
+      height: 23px;
+    }
+    
+    #appContainer {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: 100%;
+      max-width: 1152px;
+      margin: 28px 0;
+    }
+    
+    .main-box {
+      width: 100%;
+      background: linear-gradient(to bottom, rgba(40, 40, 60, 0.7), rgba(20, 20, 30, 0.7));
+      border-radius: 11px;
+      box-shadow: 0 9px 28px rgba(0, 0, 0, 0.2);
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+      overflow: hidden;
+      border: 0px solid rgba(255, 255, 255, 0.1);
+      margin-bottom: 19px;
+    }
+    
+    .content-container {
+      display: flex;
+      width: 100%;
+      min-height: 432px;
+      justify-content: space-between;
+      gap: 19px;
+      padding: 19px;
+      box-sizing: border-box;
+    }
+    
+    .draw-section {
+      flex: 5;
+      min-width: 403px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      padding: 19px;
+      position: relative;
+    }
+    
+    .prediction-section {
+      flex: 2;
+      min-width: 192px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 19px;
+      position: relative;
+    }
+    
+    .confidence-section {
+      flex: 3;
+      min-width: 288px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      padding: 19px;
+      position: relative;
+    }
+    
+    .canvas-container {
+      position: relative;
+      width: 403px;
+      height: 403px;
+    }
+    
+    #drawCanvas { 
+      position: absolute;
+      top: 0;
+      left: 0;
+      cursor: crosshair;
+      border-radius: 3px;
+      background-color: var(--canvas-bg);
+      box-shadow: 0 3px 11px rgba(0, 0, 0, 0.3);
+      width: 403px;
+      height: 403px;
+    }
+    
+    .grid-overlay {
+      pointer-events: none;
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 403px;
+      height: 403px;
+      z-index: 10;
+    }
+    
+    #predictionBox {
+      width: 134px;
+      height: 134px;
+      border: 1px solid var(--accent-color);
+      border-radius: 7px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 76px;
+      font-weight: bold;
+      background-color: var(--canvas-bg);
+      color: var(--text-color);
+      box-shadow: 0 3px 19px rgba(187, 134, 252, 0.3);
+      position: relative;
+    }
+    
+    .prediction-grid {
+      pointer-events: none;
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+    }
+    
+    .section-title {
+      color: var(--secondary-color);
+      border-bottom: 0px solid var(--canvas-border);
+      padding-bottom: 9px;
+      margin-top: 0;
+      margin-bottom: 19px;
+      font-size: 17px;
+    }
+    
+    #bars {
+      margin-bottom: 19px;
+      height: 326px;
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+      width: 100%;
+      overflow-y: visible;
+    }
+    
+    .bar-container {
+      display: flex;
+      align-items: center;
+      height: 28px;
+    }
+    
+    .digit-label {
+      width: 28px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-right: 14px;
+      background-color: var(--surface-color);
+      border-radius: 3px;
+      font-weight: bold;
+    }
+    
+    .bar-wrapper {
+      flex-grow: 1;
+      height: 19px;
+      background: var(--bar-bg);
+      border-radius: 3px;
+      overflow: hidden;
+      position: relative;
+    }
+    
+    .bar { 
+      height: 100%;
+      background: var(--bar-fill);
+      width: 0%;
+      transition: width 0.3s ease-out;
+    }
+    
+    .bar-container.active .bar { 
+      background: var(--active-bar-fill);
+    }
+    
+    .bar-container.active .digit-label {
+      background-color: var(--active-bar-fill);
+      color: var(--bg-color);
+    }
+    
+    .confidence {
+      margin-left: 14px;
+      width: 67px;
+      text-align: right;
+      font-weight: bold;
+    }
+    
+    .controls-container {
+      width: 100%;
+      display: flex;
+      justify-content: center;
+      padding: 10px 0;
+    }
+    
+    .controls {
+      display: flex;
+      gap: 14px;
+    }
+    
+    .btn {
+      background: linear-gradient(to bottom, rgba(187, 134, 252, 0.2), rgba(187, 134, 252, 0.1));
+      color: var(--text-color);
+      border: 0px solid var(--accent-color);
+      border-radius: 5px;
+      padding: 9px 19px;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-weight: bold;
+      letter-spacing: 0px;
+    }
+    
+    .btn:hover {
+      background-color: var(--accent-color);
+      color: var(--bg-color);
+      box-shadow: 0 0 14px rgba(187, 134, 252, 0.5);
+    }
+    
+    .shortcut {
+      color: var(--secondary-color);
+      font-size: 0.86em;
+    }
+    
+    ::-webkit-scrollbar {
+      width: 7px;
+    }
+    
+    ::-webkit-scrollbar-track {
+      background: var(--surface-color);
+      border-radius: 3px;
+    }
+    
+    ::-webkit-scrollbar-thumb {
+      background: var(--accent-color);
+      border-radius: 3px;
+    }
+    
+    @media (max-width: 900px) {
+      .content-container {
+        flex-direction: column;
+        align-items: center;
+      }
+      
+      .draw-section, .prediction-section, .confidence-section {
+        flex: none;
+        width: 100%;
+        min-height: 287px;
+      }
+      
+      .canvas-container, #drawCanvas {
+        width: 268px;
+        height: 268px;
+      }
+      
+      #bars {
+        height: 326px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <nav>
+      <a href="#" class="logo">MNIST Digit Predictor</a>
+      <a href="https://github.com" class="github-link" target="_blank">
+        <svg class="github-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path>
+        </svg>
+        Check out the code
+      </a>
+    </nav>
+  </header>
+  
+  <div id="appContainer">
+    <div class="main-box">
+      <div class="content-container">
+        <div class="draw-section">
+          <h3 class="section-title">Draw a Number</h3>
+          <div class="canvas-container">
+            <canvas id="drawCanvas" width="403" height="403"></canvas>
+            <div class="grid-overlay" id="gridOverlay"></div>
+          </div>
+        </div>
+        
+        <div class="prediction-section">
+          <h3 class="section-title">Prediction</h3>
+          <div id="predictionBox">?
+            <div class="prediction-grid" id="predictionGrid"></div>
+          </div>
+        </div>
+        
+        <div class="confidence-section">
+          <h3 class="section-title">Confidence Distribution</h3>
+          <div id="bars"></div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="controls-container">
+      <div class="controls">
+        <button class="btn" id="resetBtn">Reset <span class="shortcut">(R)</span></button>
+      </div>
+    </div>
+  </div>
+  
+  <script>
+    const canvas = document.getElementById('drawCanvas');
+    const ctx = canvas.getContext('2d');
+    const gridOverlay = document.getElementById('gridOverlay');
+    const predictionGrid = document.getElementById('predictionGrid');
+    const GRID_SIZE = 28;
+    const SCALE = 14;
+    const BRUSH_SIZE = 1;
+    const barsContainer = document.getElementById('bars');
+    const predictionBox = document.getElementById('predictionBox');
+    const resetBtn = document.getElementById('resetBtn');
+
+    let isDrawing = false;
+    let canvasData = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill(1));
+    let modelParams = {};
+
+    // Initialize canvas
+    function initCanvas() {
+      ctx.fillStyle = "black";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+    
+    // Draw grid lines on the canvas
+    function drawGridLines() {
+      const gridCanvas = document.createElement('canvas');
+      gridCanvas.width = canvas.width;
+      gridCanvas.height = canvas.height;
+      gridOverlay.appendChild(gridCanvas);
+      
+      const gridCtx = gridCanvas.getContext('2d');
+      gridCtx.strokeStyle = 'rgba(255, 255, 255, 0.187)';
+      gridCtx.lineWidth = 0.55;
+      
+      // Draw regular grid lines
+      for (let x = 0; x <= canvas.width; x += SCALE) {
+        gridCtx.beginPath();
+        gridCtx.moveTo(x, 0);
+        gridCtx.lineTo(x, canvas.height);
+        gridCtx.stroke();
+      }
+      
+      for (let y = 0; y <= canvas.height; y += SCALE) {
+        gridCtx.beginPath();
+        gridCtx.moveTo(0, y);
+        gridCtx.lineTo(canvas.width, y);
+        gridCtx.stroke();
+      }
+      
+      // Draw 25x25 white border
+      gridCtx.strokeStyle = 'rgba(255, 255, 255, 0.561)'; // 100% brighter (0.2805 * 2)
+      gridCtx.lineWidth = 0.55;
+      const borderSize = 25 * SCALE;
+      const offset = (canvas.width - borderSize) / 2;
+      gridCtx.beginPath();
+      gridCtx.rect(offset, offset, borderSize, borderSize);
+      gridCtx.stroke();
+    }
+    
+    // Draw grid lines on the prediction box
+    function drawPredictionGrid() {
+      const gridCanvas = document.createElement('canvas');
+      gridCanvas.width = predictionBox.offsetWidth;
+      gridCanvas.height = predictionBox.offsetHeight;
+      predictionGrid.appendChild(gridCanvas);
+      
+      const gridCtx = gridCanvas.getContext('2d');
+      gridCtx.strokeStyle = 'rgba(255, 255, 255, 0.187)';
+      gridCtx.lineWidth = 0.55;
+      
+      const cellSize = gridCanvas.width / 10;
+      
+      for (let x = 0; x <= gridCanvas.width; x += cellSize) {
+        gridCtx.beginPath();
+        gridCtx.moveTo(x, 0);
+        gridCtx.lineTo(x, gridCanvas.height);
+        gridCtx.stroke();
+      }
+      
+      for (let y = 0; y <= gridCanvas.height; y += cellSize) {
+        gridCtx.beginPath();
+        gridCtx.moveTo(0, y);
+        gridCtx.lineTo(canvas.width, y);
+        gridCtx.stroke();
+      }
+    }
+    
+    // Initialize grid lines
+    function initGrids() {
+      drawGridLines();
+      drawPredictionGrid();
+    }
+
+    function relu(z) {
+      return z.map(v => Math.max(0, v));
+    }
+
+    function softmax(z) {
+      const max = Math.max(...z);
+      const exp = z.map(v => Math.exp(v - max));
+      const sum = exp.reduce((a, b) => a + b, 0);
+      return exp.map(v => v / sum);
+    }
+
+    function matmul(W, X) {
+      return W.map(row => row.reduce((sum, wj, j) => sum + wj * X[j], 0));
+    }
+
+    function forwardProp(X) {
+      let A = X;
+      const L = Object.keys(modelParams).length / 2;
+
+      for (let l = 1; l <= L; l++) {
+        const W = modelParams[`W${l}`];
+        const b = modelParams[`b${l}`];
+        let Z = matmul(W, A).map((zi, i) => zi + b[i]);
+        A = (l === L) ? softmax(Z) : relu(Z);
+      }
+      return A;
+    }
+
+    function applyBrush(x, y) {
+      const gridX = Math.floor(x / SCALE);
+      const gridY = Math.floor(y / SCALE);
+
+      for (let dy = -BRUSH_SIZE; dy <= BRUSH_SIZE; dy++) {
+        for (let dx = -BRUSH_SIZE; dx <= BRUSH_SIZE; dx++) {
+          const nx = gridX + dx;
+          const ny = gridY + dy;
+          if (nx >= 0 && ny >= 0 && nx < GRID_SIZE && ny < GRID_SIZE) {
+            const intensity = 0.8 * Math.exp(-(dx*dx + dy*dy) / (2 * BRUSH_SIZE));
+            canvasData[ny][nx] = Math.min(canvasData[ny][nx], 1.0 - intensity);
+            ctx.fillStyle = `rgb(${canvasData[ny][nx]*255}, ${canvasData[ny][nx]*255}, ${canvasData[ny][nx]*255})`;
+            ctx.fillRect(nx * SCALE, ny * SCALE, SCALE, SCALE);
+          }
+        }
+      }
+    }
+
+    function setupCanvasEvents() {
+      canvas.addEventListener('mousedown', e => {
+        isDrawing = true;
+        applyBrush(e.offsetX, e.offsetY);
+      });
+      
+      canvas.addEventListener('mousemove', e => {
+        if (isDrawing) applyBrush(e.offsetX, e.offsetY);
+      });
+      
+      canvas.addEventListener('mouseup', () => isDrawing = false);
+      canvas.addEventListener('mouseleave', () => isDrawing = false);
+    }
+
+    function resetCanvas() {
+      canvasData = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill(1));
+      ctx.fillStyle = "black";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      updateBars(new Array(10).fill(0));
+      predictionBox.textContent = "?";
+      predictionBox.style.color = "var(--text-color)";
+    }
+
+    function updateBars(predictions) {
+      barsContainer.innerHTML = '';
+      const max = Math.max(...predictions);
+      const maxIndex = predictions.indexOf(max);
+      
+      predictionBox.textContent = maxIndex;
+      
+      predictions.forEach((conf, i) => {
+        const barContainer = document.createElement('div');
+        barContainer.className = 'bar-container' + (i === maxIndex ? ' active' : '');
+        
+        const digitLabel = document.createElement('div');
+        digitLabel.className = 'digit-label';
+        digitLabel.textContent = i;
+        
+        const barWrapper = document.createElement('div');
+        barWrapper.className = 'bar-wrapper';
+        
+        const bar = document.createElement('div');
+        bar.className = 'bar';
+        bar.style.width = (conf * 100).toFixed(1) + '%';
+        
+        const confidence = document.createElement('div');
+        confidence.className = 'confidence';
+        confidence.textContent = (conf*100).toFixed(1) + '%';
+        
+        barWrapper.appendChild(bar);
+        barContainer.appendChild(digitLabel);
+        barContainer.appendChild(barWrapper);
+        barContainer.appendChild(confidence);
+        
+        barsContainer.appendChild(barContainer);
+      });
+    }
+
+    function setupEvents() {
+      resetBtn.addEventListener('click', resetCanvas);
+      
+      document.addEventListener('keydown', e => {
+        if (e.key === 'r' || e.key === 'R') resetCanvas();
+      });
+    }
+
+    async function loadModel() {
+      try {
+        const res = await fetch('model_weights.json');
+        if (!res.ok) throw new Error('Failed to fetch model weights');
+        const json = await res.json();
+        modelParams = json;
+        for (let key in modelParams) {
+          if (key.startsWith('b')) {
+            modelParams[key] = modelParams[key].map(arr => arr[0]);
+          }
+        }
+        console.log("Model loaded successfully");
+      } catch (error) {
+        console.error("Error loading model:", error);
+        predictionBox.textContent = "E";
+        predictionBox.style.color = "var(--error-color)";
+      }
+    }
+
+    function predictFromCanvas() {
+      if (!Object.keys(modelParams).length) return;
+      
+      const input = canvasData.flat().map(v => 1 - v);
+      const prediction = forwardProp(input);
+      updateBars(prediction);
+    }
+
+    // Initialize everything
+    function init() {
+      initCanvas();
+      initGrids();
+      setupCanvasEvents();
+      setupEvents();
+      updateBars(new Array(10).fill(0));
+      
+      loadModel().then(() => {
+        setInterval(predictFromCanvas, 500);
+      });
+    }
+
+    // Start the application
+    init();
+  </script>
+</body>
+</html>
