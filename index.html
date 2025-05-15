@@ -88,6 +88,8 @@
       width: 100%;
       max-width: 1152px;
       margin: 28px 0;
+      padding: 0 10px;
+      box-sizing: border-box;
     }
     
     .main-box {
@@ -326,16 +328,46 @@
       .draw-section, .prediction-section, .confidence-section {
         flex: none;
         width: 100%;
-        min-height: 287px;
+        min-width: auto;
+        min-height: auto;
       }
       
-      .canvas-container, #drawCanvas {
-        width: 268px;
-        height: 268px;
+      .canvas-container {
+        width: 280px;
+        height: 280px;
+      }
+      
+      #drawCanvas, .grid-overlay {
+        width: 280px;
+        height: 280px;
       }
       
       #bars {
-        height: 326px;
+        height: auto;
+        max-height: 326px;
+      }
+    
+    }
+    
+    @media (max-width: 900px) {
+      
+      nav {
+        flex-direction: column;
+        gap: 10px;
+        padding: 12px;
+      }
+      
+      .logo {
+        font-size: 16px;
+      }
+      
+      .draw-section {
+        padding: 10px;
+      }
+      
+      /* Add touch support for mobile drawing */
+      #drawCanvas {
+        touch-action: none;
       }
     }
   </style>
@@ -362,6 +394,11 @@
             <canvas id="drawCanvas" width="403" height="403"></canvas>
             <div class="grid-overlay" id="gridOverlay"></div>
           </div>
+          <div class="controls-container" style="margin-top: 10px;">
+            <div class="controls">
+              <button class="btn" id="resetBtn">Reset <span class="shortcut">(R)</span></button>
+            </div>
+          </div>
         </div>
         
         <div class="prediction-section">
@@ -378,28 +415,52 @@
       </div>
     </div>
     
-    <div class="controls-container">
-      <div class="controls">
-        <button class="btn" id="resetBtn">Reset <span class="shortcut">(R)</span></button>
-      </div>
-    </div>
-  </div>
+  <!-- Desktop controls -->
+  <!-- Removed duplicate reset button here as it is moved inside draw-section -->
+  
   
   <script>
     const canvas = document.getElementById('drawCanvas');
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
     const gridOverlay = document.getElementById('gridOverlay');
     const predictionGrid = document.getElementById('predictionGrid');
     const GRID_SIZE = 28;
-    const SCALE = 14;
     const BRUSH_SIZE = 1;
     const barsContainer = document.getElementById('bars');
     const predictionBox = document.getElementById('predictionBox');
     const resetBtn = document.getElementById('resetBtn');
-
+    
+    // Use a responsive scale based on canvas size
+    let SCALE = Math.min(canvas.width, canvas.height) / GRID_SIZE;
+    
+    // Resize canvas elements to match their container size
+    function resizeCanvas() {
+      const container = canvas.parentElement;
+      const containerWidth = container.offsetWidth;
+      const containerHeight = container.offsetHeight;
+      
+      // Get the actual size of the canvas container
+      const canvasSize = Math.min(containerWidth, containerHeight);
+      
+      // Update the CSS width and height
+      canvas.style.width = canvasSize + 'px';
+      canvas.style.height = canvasSize + 'px';
+      
+      // Update scale based on canvas display size
+      SCALE = canvas.width / GRID_SIZE;
+      
+      // Update grid overlay to match canvas size
+      const gridCanvas = gridOverlay.querySelector('canvas');
+      if (gridCanvas) {
+        gridCanvas.style.width = canvasSize + 'px';
+        gridCanvas.style.height = canvasSize + 'px';
+      }
+    }
+    
     let isDrawing = false;
     let canvasData = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill(1));
     let modelParams = {};
+    let lastX, lastY;
 
     // Initialize canvas
     function initCanvas() {
@@ -466,7 +527,7 @@
       for (let y = 0; y <= gridCanvas.height; y += cellSize) {
         gridCtx.beginPath();
         gridCtx.moveTo(0, y);
-        gridCtx.lineTo(canvas.width, y);
+        gridCtx.lineTo(gridCanvas.width, y);
         gridCtx.stroke();
       }
     }
@@ -505,6 +566,27 @@
       return A;
     }
 
+    // Helper function to get position from mouse or touch event
+    function getPositionFromEvent(e) {
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;    // relationship bitmap vs. element for X
+      const scaleY = canvas.height / rect.height;  // relationship bitmap vs. element for Y
+      
+      let clientX, clientY;
+      if (e.type.includes('touch')) {
+        clientX = e.touches[0].clientX;
+        clientY = e.touches[0].clientY;
+      } else {
+        clientX = e.clientX;
+        clientY = e.clientY;
+      }
+      
+      return {
+        x: (clientX - rect.left) * scaleX,
+        y: (clientY - rect.top) * scaleY
+      };
+    }
+
     function applyBrush(x, y) {
       const gridX = Math.floor(x / SCALE);
       const gridY = Math.floor(y / SCALE);
@@ -522,19 +604,80 @@
         }
       }
     }
+    
+    // Draw a line between last point and current point for smoother drawing
+    function drawLine(x1, y1, x2, y2) {
+      const dx = x2 - x1;
+      const dy = y2 - y1;
+      const steps = Math.max(Math.abs(dx), Math.abs(dy)) * 2;
+      
+      if (steps === 0) {
+        applyBrush(x1, y1);
+        return;
+      }
+      
+      const xIncrement = dx / steps;
+      const yIncrement = dy / steps;
+      
+      for (let i = 0; i <= steps; i++) {
+        const x = x1 + (xIncrement * i);
+        const y = y1 + (yIncrement * i);
+        applyBrush(x, y);
+      }
+    }
 
     function setupCanvasEvents() {
+      // Mouse events
       canvas.addEventListener('mousedown', e => {
         isDrawing = true;
-        applyBrush(e.offsetX, e.offsetY);
+        const pos = getPositionFromEvent(e);
+        lastX = pos.x;
+        lastY = pos.y;
+        applyBrush(pos.x, pos.y);
       });
       
       canvas.addEventListener('mousemove', e => {
-        if (isDrawing) applyBrush(e.offsetX, e.offsetY);
+        if (!isDrawing) return;
+        const pos = getPositionFromEvent(e);
+        drawLine(lastX, lastY, pos.x, pos.y);
+        lastX = pos.x;
+        lastY = pos.y;
       });
       
-      canvas.addEventListener('mouseup', () => isDrawing = false);
-      canvas.addEventListener('mouseleave', () => isDrawing = false);
+      canvas.addEventListener('mouseup', () => {
+        isDrawing = false;
+      });
+      
+      canvas.addEventListener('mouseleave', () => {
+        isDrawing = false;
+      });
+      
+      // Touch events for mobile
+      canvas.addEventListener('touchstart', e => {
+        e.preventDefault(); // Prevent scrolling when drawing
+        isDrawing = true;
+        const pos = getPositionFromEvent(e);
+        lastX = pos.x;
+        lastY = pos.y;
+        applyBrush(pos.x, pos.y);
+      });
+      
+      canvas.addEventListener('touchmove', e => {
+        e.preventDefault(); // Prevent scrolling when drawing
+        if (!isDrawing) return;
+        const pos = getPositionFromEvent(e);
+        drawLine(lastX, lastY, pos.x, pos.y);
+        lastX = pos.x;
+        lastY = pos.y;
+      });
+      
+      canvas.addEventListener('touchend', () => {
+        isDrawing = false;
+      });
+      
+      canvas.addEventListener('touchcancel', () => {
+        isDrawing = false;
+      });
     }
 
     function resetCanvas() {
@@ -584,8 +727,14 @@
     function setupEvents() {
       resetBtn.addEventListener('click', resetCanvas);
       
+      
       document.addEventListener('keydown', e => {
         if (e.key === 'r' || e.key === 'R') resetCanvas();
+      });
+      
+      // Resize handler for responsive canvas
+      window.addEventListener('resize', () => {
+        resizeCanvas();
       });
     }
 
@@ -619,6 +768,7 @@
     // Initialize everything
     function init() {
       initCanvas();
+      resizeCanvas();
       initGrids();
       setupCanvasEvents();
       setupEvents();
