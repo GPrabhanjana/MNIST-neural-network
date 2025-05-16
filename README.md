@@ -1,7 +1,7 @@
 # MNIST-neural-network
 This collection of scripts supports the development and deployment of a neural network model, optimised for recognizing handwritten digits from the MNIST dataset. It includes training, parameter conversion for frontend integration, realtime prediction, and visualization tools.
 
-You can check out the live demo here [https://mnist-neural-network.netlify.app/](here).
+You can check out the live demo here [here](https://mnist-neural-network.netlify.app/).
 ## Contents
 
 - `1_layer.py`: Implementation of a single-layer neural network for MNIST digit classification.
